@@ -21,14 +21,21 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <ctime>
 
 using namespace std;
 namespace fs = filesystem;
 
-#define MusicLibrary "C:/Users/Xen/Music/"      // Your main Music Library here
+#define MusicLibrary "C:/Users/Xen/Music/"         // Your main Music Library here
 #define RemovableDir "F:/Music/"                   // Location in Removable Disk
 vector<string> FILTER = {".mp3", ".wav", ".flac"}; // Filter, use comma (,)
 
+
+struct UnsyncedFile {
+    string name, humanFileSize;
+    fs::path fullPath;
+    double bytes;
+};
 
 
 //Lists directory files recursively using filesystem::recursive_directory_iterator
@@ -69,6 +76,38 @@ vector<string> getUnsyncedFiles(const vector<string> &localDir, const vector<str
     return unsyncedFiles;
 }
 
+//Takes bytes and return human readable file size
+char *humanReadableFS(double size, char *buf) {
+    int i = 0;
+    const char *units[] = {"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+    while (size > 1024) {
+        size /= 1024;
+        i++;
+    }
+    sprintf(buf, "%.*f %s", i, size, units[i]);
+    return buf;
+}
+
+//Takes milliseconds and return human readable time
+static const string formatTimer(const double &time)
+{
+    double calcET; stringstream calcSS;
+
+    if (time < 1000) {
+        calcSS << fixed << setprecision(2) << time << " ms";
+    }
+    else if (time > 999 && time < 60000) {
+        calcET = time / 1000.0;
+        calcSS << fixed << setprecision(2) << calcET << " sec";
+    }
+    else if (time > 59999) {
+        calcET = (time / 1000.0) / 60.0;
+        calcSS << fixed << setprecision(2) << calcET << " min";
+    }
+
+    return calcSS.str();
+}
+
 int main()
 {
     cout << "Hey buddy! Give me a moment..." << endl << endl;
@@ -82,59 +121,106 @@ int main()
         return 1;
     }
 
-recheck:
-    cout << "Calculating local music library: \"" << MusicLibrary << "\"..." << endl;
-    vector<string> localMusicFiles = listDir(MusicLibrary);
-    cout << "Done. " << localMusicFiles.size() << " In local music library. " << endl;
+    char mlCapacity[10], mlAvailable[10], mlFree[10];
+    cout << "Music Library Path: " << MusicLibrary << endl;
+    cout << "Capacity\tAvailable\tFree" << endl;
+    cout
+    << humanReadableFS(fs::space(MusicLibrary).capacity, mlCapacity) << "\t"
+    << humanReadableFS(fs::space(MusicLibrary).available, mlAvailable) << "\t"
+    << humanReadableFS(fs::space(MusicLibrary).free, mlFree) << endl << endl;
 
-    cout << "Calculating removable music directory: \"" << RemovableDir << "\"..." << endl;
+    char rdCapacity[10], rdAvailable[10], rdFree[10];
+    cout << "Removable Directory Path: " << RemovableDir << endl;
+    cout << "Capacity\tAvailable\tFree" << endl;
+    cout
+    << humanReadableFS(fs::space(RemovableDir).capacity, rdCapacity) << "\t"
+    << humanReadableFS(fs::space(RemovableDir).available, rdAvailable) << "\t"
+    << humanReadableFS(fs::space(RemovableDir).free, rdFree) << endl << endl;
+
+recheck:
+    cout << "Calculating local Music Library..." << endl;
+    vector<string> localMusicFiles = listDir(MusicLibrary);
+    cout << "Done. " << localMusicFiles.size() << " Files in local Music Library." << endl << endl;
+
+    cout << "Calculating Removable Directory..." << endl;
     vector<string> removableMusicFiles = listDir(RemovableDir);
-    cout << "Done. " << removableMusicFiles.size() << " In removable music directory." << endl << endl;
+    cout << "Done. " << removableMusicFiles.size() << " Files in Removable Directory." << endl << endl;
 
     bool evenStevens = isSynced(localMusicFiles, removableMusicFiles);
 
-    cout << "Are both synced? " << (evenStevens ? "YES" : "NO") << endl;
+    cout << endl << "Are both locations synced? -> " << (evenStevens ? "YES" : "NO!") << endl << endl;
 
     if (!evenStevens) {
         vector<string> unsyncedFiles(getUnsyncedFiles(localMusicFiles, removableMusicFiles));
+        vector<UnsyncedFile> _UnsyncedFiles;
+
+        double totalFileSize = 0;
+        for (auto &unsyncedFile : unsyncedFiles) {
+            UnsyncedFile _UnsyncedFile;
+            fs::path truePath{MusicLibrary+unsyncedFile};
+            _UnsyncedFile.name = unsyncedFile;
+            _UnsyncedFile.fullPath = truePath.make_preferred();
+            _UnsyncedFile.bytes = fs::file_size(truePath.make_preferred());
+
+            char humanBytes[10];
+            _UnsyncedFile.humanFileSize = humanReadableFS(_UnsyncedFile.bytes, humanBytes);
+
+            totalFileSize += _UnsyncedFile.bytes;
+
+            _UnsyncedFiles.push_back(_UnsyncedFile);
+        }
+        char humanTotalFS[10];
+
         char showUnsyncedFiles;
         cout << "Do you want to show the unsynced files? [y/n]: ";
         cin >> showUnsyncedFiles;
         if (showUnsyncedFiles == 'y') {
             cout << endl;
             int num = 1;
-            for (auto &unsyncedFile : unsyncedFiles) {
-                cout << num << ". " << unsyncedFile << endl;
+            for (const auto &_UnsyncedFile : _UnsyncedFiles) {
+                cout << num << ". " << _UnsyncedFile.name <<
+                " | " << _UnsyncedFile.humanFileSize << endl;
                 num++;
             }
             cout << endl;
         }
 
         char copyUnsyncedFiles;
-        cout << "Do you want to copy the unsynced files into the removable directory? [y/n]: ";
+        cout << "Do you want to copy the unsynced files (" <<
+        humanReadableFS(totalFileSize, humanTotalFS) <<
+        ") into the removable directory? [y/n]: ";
         cin >> copyUnsyncedFiles;
         if (copyUnsyncedFiles == 'y') {
             int num = 1;
-            for (const auto & unsyncedFile : unsyncedFiles) {
-            fs::path fromPath{MusicLibrary+unsyncedFile};
-            fs::path toPath{RemovableDir+unsyncedFile};
+            double totalTime = 0;
 
-                cout << endl << endl << "Working on \"" << unsyncedFile << "\"..." << endl;
+            for (const auto & _UnsyncedFile : _UnsyncedFiles) {
+            fs::path toPath{RemovableDir + _UnsyncedFile.name};
+
+                cout << endl << endl << "Working on \"" << _UnsyncedFile.name << "\"..." << endl;
 
                 try {
-                    //filesystem::copy_file is so dumb, we most create the dirs first before we copy
+                    clock_t timer; timer = clock();
+
+                    //filesystem::copy_file is so dumb, Won't work even with fs::copy_options::recursive
+                    //we most create the dirs first before we copy
                     //or it is going to fail, no need to check for existing ones...
                     fs::create_directories(toPath.string().substr(0, toPath.string().find_last_of("/\\")));
 
                     //Now we can copy...
-                    fs::copy_file(fromPath.make_preferred(), toPath.make_preferred());
-                    cout << "[" << num << "/"<< unsyncedFiles.size() << "] File \""
-                    << unsyncedFile << "\" copied to \"" << toPath.make_preferred().string() << "\".";
+                    fs::copy_file(_UnsyncedFile.fullPath, toPath.make_preferred());
+
+                    double timeElapsed = (clock() - timer) / (double)(CLOCKS_PER_SEC / 1000);
+                    totalTime += timeElapsed;
+
+                    cout << "[" << num << "/"<< _UnsyncedFiles.size() << "] File \""
+                    << _UnsyncedFile.name << "\" copied to \"" << toPath.make_preferred().string() << "\"." << endl;
+                    cout << "File size: "<< _UnsyncedFile.humanFileSize << ". It took " << formatTimer(timeElapsed) << endl;
 
                 }
                 catch(fs::filesystem_error const &ex) {
-                    cerr << "[" << num << "/"<< unsyncedFiles.size() <<
-                    "] Failed to copy file \"" << unsyncedFile << "\"!!!" << endl;
+                    cerr << "[" << num << "/"<< _UnsyncedFiles.size() <<
+                    "] Failed to copy file \"" << _UnsyncedFile.name << "\"!!!" << endl;
                     cerr
                         << "Why: " << ex.code().message() << endl
                         << "path1: " << ex.path1() << endl
@@ -142,19 +228,19 @@ recheck:
                 }
                 num++;
             }
-            cout << endl << "All files has been processed." << endl;
-            cout << "Do you want to rescan both folders to make sure they're synced? [y/n]: ";
+            cout << endl << endl << "All files has been processed. Time elapsed: " << formatTimer(totalTime) << endl;
+            cout << endl << "Do you want to rescan both folders to make sure they're synced? [y/n]: ";
             char rescanDirs;
             cin >> rescanDirs;
 
             if (rescanDirs == 'y') goto recheck;
-            cout << "Alright, take care!";
+            cout << "Alright, take care!" << endl;
 
             return 0;
         }
     }
     else {
-        cout << "Looks like there's nothing to do here. CYA!!!" << endl;
+        cout << "Well...Looks like there's nothing to do here. CYA!!!" << endl;
         return 0;
     }
 

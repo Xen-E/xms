@@ -3,3 +3,4 @@ bin/
 test/
 .vscode/
 todo.txt
+CMakeLists.txt.user
