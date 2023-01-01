@@ -29,7 +29,7 @@ Notice the **-std=c++17**, It's very important because our project use [Filesyst
 
 # Usage
 Nothing special, just type the name of the binary; Example...I named mine **sync.exe** and i put it in **system32** directory which will allow me to access it quickly from the **cmd** by just using:
-1. <kbd>Ctrl</kbd> + <kbd>Super</kbd>
+1. <kbd>Super</kbd> + <kbd>R</kbd>
 2. type **cmd**
 3. hit <kbd>Enter</kbd>
 4. type **sync**
