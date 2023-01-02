@@ -66,11 +66,11 @@ bool isSynced(const vector<string> &dir1, const vector<string> &dir2) {
 }
 
 //Compares files between two dirs and list any missing paths
-vector<string> getUnsyncedFiles(const vector<string> &localDir, const vector<string> &removableDir) {
+vector<string> getUnsyncedFiles(const vector<string> &dir1, const vector<string> &dir2) {
     vector<string> unsyncedFiles;
-    for (const auto &musicFile : localDir) {
-        if (!count(removableDir.begin(), removableDir.end(), musicFile)) {
-            unsyncedFiles.push_back(musicFile);
+    for (const auto &file : dir1) {
+        if (!count(dir2.begin(), dir2.end(), file)) {
+            unsyncedFiles.push_back(file);
         }
     }
     return unsyncedFiles;
@@ -151,16 +151,29 @@ recheck:
     cout << endl << "Are both locations synced? -> " << (evenStevens ? "YES" : "NO!") << endl << endl;
 
     if (!evenStevens) {
-        vector<string> unsyncedFiles(getUnsyncedFiles(localMusicFiles, removableMusicFiles));
+
+        bool musicLibraryToRemovable = localMusicFiles.size() > removableMusicFiles.size();
+
+        vector<string> unsyncedFiles(   musicLibraryToRemovable ?
+                                        getUnsyncedFiles(localMusicFiles, removableMusicFiles) :
+                                        getUnsyncedFiles(removableMusicFiles, localMusicFiles)  );
+
+
         vector<UnsyncedFile> _UnsyncedFiles;
 
         double totalFileSize = 0;
         for (auto &unsyncedFile : unsyncedFiles) {
             UnsyncedFile _UnsyncedFile;
-            fs::path truePath{MusicLibrary+unsyncedFile};
-            _UnsyncedFile.name = unsyncedFile;
+
+            const string strPath =  musicLibraryToRemovable ?
+                                    MusicLibrary + unsyncedFile :
+                                    RemovableDir + unsyncedFile;
+
+            fs::path truePath{strPath};
+
+            _UnsyncedFile.name     = unsyncedFile;
             _UnsyncedFile.fullPath = truePath.make_preferred();
-            _UnsyncedFile.bytes = fs::file_size(truePath.make_preferred());
+            _UnsyncedFile.bytes    = fs::file_size(truePath.make_preferred());
 
             char humanBytes[10];
             _UnsyncedFile.humanFileSize = humanReadableFS(_UnsyncedFile.bytes, humanBytes);
@@ -169,9 +182,9 @@ recheck:
 
             _UnsyncedFiles.push_back(_UnsyncedFile);
         }
-        char humanTotalFS[10];
 
-        char showUnsyncedFiles;
+        char humanTotalFS[10], showUnsyncedFiles;
+
         cout << "Do you want to show the unsynced files? [y/n]: ";
         cin >> showUnsyncedFiles;
         if (showUnsyncedFiles == 'y') {
@@ -188,14 +201,19 @@ recheck:
         char copyUnsyncedFiles;
         cout << "Do you want to copy the unsynced files (" <<
         humanReadableFS(totalFileSize, humanTotalFS) <<
-        ") into the removable directory? [y/n]: ";
+        ") into the " << (musicLibraryToRemovable ?
+        "Removable Directory" : "Music Library") << "? [y/n]: ";
         cin >> copyUnsyncedFiles;
         if (copyUnsyncedFiles == 'y') {
             int num = 1;
             double totalTime = 0;
 
             for (const auto & _UnsyncedFile : _UnsyncedFiles) {
-            fs::path toPath{RemovableDir + _UnsyncedFile.name};
+                const string strPath =  musicLibraryToRemovable ?
+                                    RemovableDir + _UnsyncedFile.name :
+                                    MusicLibrary + _UnsyncedFile.name;
+
+                fs::path destinationPath{strPath};
 
                 cout << endl << endl << "Working on \"" << _UnsyncedFile.name << "\"..." << endl;
 
@@ -205,16 +223,16 @@ recheck:
                     //filesystem::copy_file is so dumb, Won't work even with fs::copy_options::recursive
                     //we most create the dirs first before we copy
                     //or it is going to fail, no need to check for existing ones...
-                    fs::create_directories(toPath.string().substr(0, toPath.string().find_last_of("/\\")));
+                    fs::create_directories(destinationPath.string().substr(0, destinationPath.string().find_last_of("/\\")));
 
                     //Now we can copy...
-                    fs::copy_file(_UnsyncedFile.fullPath, toPath.make_preferred());
+                    fs::copy_file(_UnsyncedFile.fullPath, destinationPath.make_preferred());
 
                     double timeElapsed = (clock() - timer) / (double)(CLOCKS_PER_SEC / 1000);
                     totalTime += timeElapsed;
 
                     cout << "[" << num << "/"<< _UnsyncedFiles.size() << "] File \""
-                    << _UnsyncedFile.name << "\" copied to \"" << toPath.make_preferred().string() << "\"." << endl;
+                    << _UnsyncedFile.name << "\" copied to \"" << destinationPath.make_preferred().string() << "\"." << endl;
                     cout << "File size: "<< _UnsyncedFile.humanFileSize << ". It took " << formatTimer(timeElapsed) << endl;
 
                 }
