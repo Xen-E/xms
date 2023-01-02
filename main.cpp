@@ -26,9 +26,9 @@
 using namespace std;
 namespace fs = filesystem;
 
-#define MusicLibrary "C:/Users/Xen/Music/"         // Your main Music Library here
-#define RemovableDir "F:/Music/"                   // Location in Removable Disk
-vector<string> FILTER = {".mp3", ".wav", ".flac"}; // Filter, use comma (,)
+#define MusicLibrary "C:/Users/Xen/Music/"               // Your main Music Library here
+#define RemovableDir "F:/Music/"                         // Location in Removable Disk
+const vector<string> FILTER = {".mp3", ".wav", ".flac"}; // Filter, use comma (,)
 
 
 struct UnsyncedFile {
@@ -38,10 +38,28 @@ struct UnsyncedFile {
 };
 
 
+//Creates a CLI progress bar based on given disk capacity & available space
+//The ratio var controls the progress bar size.
+const string PBFromFSSpace( const uintmax_t &capacity,
+                            const uintmax_t &free,
+                            const unsigned short ratio) {
+
+    string progressBar = "[";
+    const unsigned short _ratio = (free * ratio) / capacity;
+    const unsigned short left_percent = (free * 100) / capacity;
+
+    for (short i=ratio; i>=0; i--) {
+        if (i >= _ratio) progressBar += "|";
+        else progressBar += "-";
+    }
+    progressBar += "] " + to_string(left_percent) + "% Free";
+    return progressBar;
+}
+
 //Lists directory files recursively using filesystem::recursive_directory_iterator
 //file paths need to match filter and also they will be trimmed, example:
 //C:/Users/Xen/Music/song.mp3 -> song.mp3
-vector<string> listDir(const string &dir) {
+const vector<string> listDir(const string &dir) {
     vector<string> files;
 
     for (const auto &fileName : fs::recursive_directory_iterator{fs::path(dir)})
@@ -66,7 +84,7 @@ bool isSynced(const vector<string> &dir1, const vector<string> &dir2) {
 }
 
 //Compares files between two dirs and list any missing paths
-vector<string> getUnsyncedFiles(const vector<string> &dir1, const vector<string> &dir2) {
+const vector<string> getUnsyncedFiles(const vector<string> &dir1, const vector<string> &dir2) {
     vector<string> unsyncedFiles;
     for (const auto &file : dir1) {
         if (!count(dir2.begin(), dir2.end(), file)) {
@@ -89,7 +107,7 @@ char *humanReadableFS(double size, char *buf) {
 }
 
 //Takes milliseconds and return human readable time
-static const string formatTimer(const double &time)
+const string formatTimer(const double &time)
 {
     double calcET; stringstream calcSS;
 
@@ -112,6 +130,7 @@ int main()
 {
     cout << "Hey buddy! Give me a moment..." << endl << endl;
 
+
     if (!fs::exists(MusicLibrary)) {
         cerr << "Can't find Music Library: \"" << MusicLibrary << "\". Exiting..." << endl;
         return 1;
@@ -121,21 +140,27 @@ int main()
         return 1;
     }
 
-    char mlCapacity[10], mlAvailable[10], mlFree[10];
-    cout << "Music Library Path: " << MusicLibrary << endl;
-    cout << "Capacity\tAvailable\tFree" << endl;
-    cout
-    << humanReadableFS(fs::space(MusicLibrary).capacity, mlCapacity) << "\t"
-    << humanReadableFS(fs::space(MusicLibrary).available, mlAvailable) << "\t"
-    << humanReadableFS(fs::space(MusicLibrary).free, mlFree) << endl << endl;
+    uintmax_t   mlCapacity(fs::space(MusicLibrary).capacity),
+                mlFree(fs::space(MusicLibrary).free),
+                rdCapacity(fs::space(RemovableDir).capacity),
+                rdFree(fs::space(RemovableDir).free);
 
-    char rdCapacity[10], rdAvailable[10], rdFree[10];
-    cout << "Removable Directory Path: " << RemovableDir << endl;
-    cout << "Capacity\tAvailable\tFree" << endl;
+    char    mlCapacityChar[10], mlFreeChar[10],
+            rdCapacityChar[10], rdFreeChar[10];
+
+    cout << "Music Library Path: " << MusicLibrary << endl;
+    cout << "Capacity\tFree" << endl;
     cout
-    << humanReadableFS(fs::space(RemovableDir).capacity, rdCapacity) << "\t"
-    << humanReadableFS(fs::space(RemovableDir).available, rdAvailable) << "\t"
-    << humanReadableFS(fs::space(RemovableDir).free, rdFree) << endl << endl;
+    << humanReadableFS(mlCapacity, mlCapacityChar) << "\t"
+    << humanReadableFS(mlFree, mlFreeChar) << "\t"
+    << PBFromFSSpace(mlCapacity, mlFree, 15) << endl << endl;
+
+    cout << "Removable Directory Path: " << RemovableDir << endl;
+    cout << "Capacity\tFree" << endl;
+    cout
+    << humanReadableFS(rdCapacity, rdCapacityChar) << "\t"
+    << humanReadableFS(rdFree, rdFreeChar) << "\t"
+    << PBFromFSSpace(rdCapacity, rdFree, 15) << endl << endl;
 
 recheck:
     cout << "Calculating local Music Library..." << endl;
@@ -252,13 +277,13 @@ recheck:
             cin >> rescanDirs;
 
             if (rescanDirs == 'y') goto recheck;
-            cout << "Alright, take care!" << endl;
+            cout << "Alright, take care!" << endl << endl;
 
             return 0;
         }
     }
     else {
-        cout << "Well...Looks like there's nothing to do here. CYA!!!" << endl;
+        cout << "Well...Looks like there's nothing to do here. CYA!!!" << endl << endl;
         return 0;
     }
 
