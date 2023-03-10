@@ -263,7 +263,7 @@ recheck:
                     //filesystem::copy_file is so dumb, Won't work even with fs::copy_options::recursive
                     //we most create the dirs first before we copy
                     //or it is going to fail, no need to check for existing ones...
-                    fs::create_directories(destinationPath.wstring().substr(0, destinationPath.string().find_last_of("/\\")));
+                    fs::create_directories(destinationPath.wstring().substr(0, destinationPath.wstring().find_last_of(L"/\\")));
 
                     //Now we can copy...
                     fs::copy_file(_UnsyncedFile.fullPath, destinationPath.make_preferred());
